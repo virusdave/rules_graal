@@ -16,6 +16,8 @@ def _graal_binary_implementation(ctx):
     graal_inputs, _, _ = ctx.resolve_command(tools = [graal_attr])
     graal = graal_inputs[0]
 
+    platform = ctx.attr.platform
+
     classpath_depset = depset(transitive = [
         dep[JavaInfo].transitive_runtime_jars
         for dep in ctx.attr.deps
@@ -103,6 +105,7 @@ def _graal_binary_implementation(ctx):
 
     ctx.actions.run(
         inputs = classpath_depset,
+        mnemonic = "NativeImage-%s" % platform,
         outputs = [binary],
         arguments = [args],
         executable = graal,
@@ -126,6 +129,7 @@ graal_binary = rule(
         "reflection_configuration": attr.label(mandatory=False, allow_single_file=True),
         "jni_configuration": attr.label(mandatory=False, allow_single_file=True),
         "main_class": attr.string(),
+        "platform": attr.string(default = "host"),
         "include_resources": attr.string(),
         "initialize_at_build_time": attr.string_list(),
         "initialize_at_run_time": attr.string_list(),
