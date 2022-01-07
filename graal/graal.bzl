@@ -1,26 +1,30 @@
+"""
+Rule implementation for native-image AOT compiled binary
+"""
+
 load("@bazel_tools//tools/cpp:toolchain_utils.bzl", "find_cpp_toolchain")
 load(
     "@bazel_tools//tools/build_defs/cc:action_names.bzl",
-    "ASSEMBLE_ACTION_NAME",
-    "CPP_COMPILE_ACTION_NAME",
+    # "ASSEMBLE_ACTION_NAME",
+    # "CPP_COMPILE_ACTION_NAME",
     "CPP_LINK_DYNAMIC_LIBRARY_ACTION_NAME",
     "CPP_LINK_EXECUTABLE_ACTION_NAME",
     "CPP_LINK_STATIC_LIBRARY_ACTION_NAME",
     "C_COMPILE_ACTION_NAME",
-    "OBJCPP_COMPILE_ACTION_NAME",
-    "OBJC_COMPILE_ACTION_NAME",
+    # "OBJCPP_COMPILE_ACTION_NAME",
+    # "OBJC_COMPILE_ACTION_NAME",
 )
 
 def _graal_binary_implementation(ctx):
-    graal_attr = ctx.attr._graal
-    graal_inputs, _, _ = ctx.resolve_command(tools = [graal_attr])
-    graal = graal_inputs[0]
+    graal_info = ctx.toolchains["//graal:toolchain_type"].graalinfo
+    graal = graal_info.native_image_path
 
     classpath_depset = depset(transitive = [
         dep[JavaInfo].transitive_runtime_jars
         for dep in ctx.attr.deps
     ])
 
+    # TODO(Dave): Should this all go in the toolchain impl?
     cc_toolchain = find_cpp_toolchain(ctx)
     feature_configuration = cc_common.configure_features(
         ctx = ctx,
@@ -44,6 +48,7 @@ def _graal_binary_implementation(ctx):
         feature_configuration = feature_configuration,
         action_name = CPP_LINK_DYNAMIC_LIBRARY_ACTION_NAME,
     )
+    # ~~~TODO~~~
 
     tool_paths = [c_compiler_path, ld_executable_path, ld_static_lib_path, ld_dynamic_lib_path]
     path_set = {}
@@ -130,12 +135,12 @@ graal_binary = rule(
         "initialize_at_build_time": attr.string_list(),
         "initialize_at_run_time": attr.string_list(),
         "native_image_features": attr.string_list(),
-        "_graal": attr.label(
-            cfg = "host",
-            default = "@graal//:bin/native-image",
-            allow_files = True,
-            executable = True,
-        ),
+        # "_graal": attr.label(
+        #     cfg = "host",
+        #     default = "@graal//:bin/native-image",
+        #     allow_files = True,
+        #     executable = True,
+        # ),
         "_cc_toolchain": attr.label(
             default = Label("@bazel_tools//tools/cpp:current_cc_toolchain")
         ),
@@ -145,4 +150,7 @@ graal_binary = rule(
     },
     executable = True,
     fragments = ["cpp"],
+    toolchains = [
+        "//graal:toolchain_type",
+    ],
 )

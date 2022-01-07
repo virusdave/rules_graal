@@ -1,3 +1,7 @@
+"""
+Repository Rule implementation for native-image binaries
+"""
+
 _graal_archive_internal_prefixs = {
     "darwin-amd64": "graalvm-ce-java{java_version}-{version}/Contents/Home",
     "linux-amd64": "graalvm-ce-java{java_version}-{version}",
@@ -140,6 +144,7 @@ def _get_platform(ctx):
         fail("Unsupported operating system: " + ctx.os.name)
 
 def _graal_bindist_repository_impl(ctx):
+    platforms = ["linux-amd64", "darwin-amd64"]
     platform = _get_platform(ctx)
     version = ctx.attr.version
     java_version = ctx.attr.java_version
@@ -161,20 +166,37 @@ def _graal_bindist_repository_impl(ctx):
         stripPrefix = archive_internal_prefix,
     )
 
-    # download native image
-    native_image_config = _graal_native_image_version_configs[version]
-    native_image_sha = native_image_config["sha"][java_version][platform]
-    native_image_urls = [url.format(**format_args) for url in native_image_config["urls"]]
+    # native_image_platform
+    for native_image_platform in platforms:
+        format_args = {
+            "version": version,
+            "platform": native_image_platform,
+            "java_version": java_version,
+        }
 
-    ctx.download(
-        url = native_image_urls,
-        sha256 = native_image_sha,
-        output = "native-image-installer.jar",
-    )
+        # download native image
+        native_image_config = _graal_native_image_version_configs[version]
+        native_image_sha = native_image_config["sha"][java_version][native_image_platform]
+        native_image_urls = [url.format(**format_args) for url in native_image_config["urls"]]
 
-    exec_result = ctx.execute(["bin/gu", "install", "--local-file", "native-image-installer.jar"], quiet = False)
-    if exec_result.return_code != 0:
-        fail("Unable to install native image:\n{stdout}\n{stderr}".format(stdout = exec_result.stdout, stderr = exec_result.stderr))
+        ctx.download(
+            url = native_image_urls,
+            sha256 = native_image_sha,
+            output = "{platform}/native-image-installer.jar".format(platform = native_image_platform),
+        )
+
+        # TODO(Dave): What to do here if it's the wrong platform?  The installer will fail if executed.
+        if platform == native_image_platform:
+            exec_result = ctx.execute([
+                "bin/gu", 
+                "install", 
+                "--local-file", 
+                "{platform}/native-image-installer.jar".format(platform = native_image_platform)
+            ], quiet = False)
+            if exec_result.return_code != 0:
+                fail("Unable to install native image:\n{stdout}\n{stderr}".format(stdout = exec_result.stdout, stderr = exec_result.stderr))
+        else:
+            ctx.file("{platform}/native-image".format(platform = native_image_platform), "")
 
     ctx.file("BUILD", """exports_files(glob(["**/*"]))""")
     ctx.file("WORKSPACE", "workspace(name = \"{name}\")".format(name = ctx.name))
